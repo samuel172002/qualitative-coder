@@ -7,6 +7,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import streamlit as st
 
 from first_cycle.coders import CODER_REGISTRY
@@ -31,15 +34,10 @@ if "output_dir" not in st.session_state:
 
 # ─── Sidebar configuration ────────────────────────────────────────────────────
 
+api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
 with st.sidebar:
     st.title("⚙️ Configuration")
-
-    api_key = st.text_input(
-        "Anthropic API Key",
-        value=os.environ.get("ANTHROPIC_API_KEY", ""),
-        type="password",
-        help="Your Anthropic API key. Can also be set via ANTHROPIC_API_KEY env var.",
-    )
 
     model = st.selectbox(
         "Model",
@@ -152,7 +150,7 @@ with run_col:
 
 if run_clicked:
     if not api_key:
-        st.error("Please enter your Anthropic API key in the sidebar.")
+        st.error("Anthropic API key not found. Add it to the `.env` file as `ANTHROPIC_API_KEY=sk-ant-...` and restart the app.")
         st.stop()
     if not selected_methods:
         st.error("Please select at least one coding method.")
