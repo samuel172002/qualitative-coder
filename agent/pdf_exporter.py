@@ -11,6 +11,54 @@ from shared.models import FirstCycleResult, SecondCycleResult
 
 logger = logging.getLogger(__name__)
 
+# ── Unicode -> Latin-1 sanitizer ──────────────────────────────────────────────
+# Helvetica (built-in PDF font) is Latin-1 only. LLM output routinely contains
+# em dashes, curly quotes, arrows, ellipsis, etc. Map them to safe equivalents.
+_UNICODE_MAP: dict[str, str] = {
+    '—': '--',   # em dash
+    '–': '-',    # en dash
+    '‒': '-',    # figure dash
+    '‐': '-',    # hyphen
+    '‑': '-',    # non-breaking hyphen
+    '―': '--',   # horizontal bar
+    '‘': "'",    # left single quote
+    '’': "'",    # right single quote
+    '‚': ',',    # single low-9 quote
+    '‛': "'",    # single high reversed-9 quote
+    '“': '"',    # left double quote
+    '”': '"',    # right double quote
+    '„': '"',    # double low-9 quote
+    '‟': '"',    # double high reversed-9 quote
+    '…': '...',  # horizontal ellipsis
+    '•': '-',    # bullet
+    '‣': '-',    # triangular bullet
+    ' ': ' ',    # non-breaking space
+    '­': '-',    # soft hyphen
+    '→': '->',   # rightwards arrow
+    '←': '<-',   # leftwards arrow
+    '↔': '<->',  # left right arrow
+    '⇒': '=>',   # rightwards double arrow
+    '♥': '*',    # heart suit
+    '✓': 'v',    # check mark
+    '×': 'x',    # multiplication sign
+    '÷': '/',    # division sign
+}
+
+
+def _safe(text: object) -> str:
+    """Sanitize any value to Latin-1-safe string for use in PDF cells."""
+    s = str(text) if text is not None else ''
+    out: list[str] = []
+    for ch in s:
+        if ch in _UNICODE_MAP:
+            out.append(_UNICODE_MAP[ch])
+        elif ord(ch) <= 255:
+            out.append(ch)
+        else:
+            out.append('?')
+    return ''.join(out)
+
+
 # Colour palette
 _DARK_BLUE   = (26,  60,  100)
 _RED         = (231, 76,  60)
@@ -26,7 +74,7 @@ _TEXT        = (40,  40,  40)
 class _PDF(FPDF):
     def __init__(self, run_title: str) -> None:
         super().__init__()
-        self._run_title = run_title
+        self._run_title = _safe(run_title)
         self.set_auto_page_break(auto=True, margin=18)
         self.set_margins(15, 14, 15)
 
@@ -52,7 +100,7 @@ class _PDF(FPDF):
         self.set_text_color(*_GRAY)
         self.cell(
             0, 5,
-            "Qualitative Coding Agent — Saldaña's Coding Framework (Anthropic API)",
+            "Qualitative Coding Agent - Saldana's Coding Framework (Anthropic API)",
             align="C",
         )
         self.set_text_color(*_TEXT)
@@ -111,7 +159,7 @@ class PDFExporter:
         pdf.set_xy(15, 80)
         pdf.cell(
             180, 7,
-            "Saldaña's Qualitative Coding Framework — AI-Assisted Analysis",
+            "Saldana's Qualitative Coding Framework - AI-Assisted Analysis",
             align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT,
         )
 
@@ -129,7 +177,7 @@ class PDFExporter:
         pdf.set_fill_color(*_WHITE)
         pdf.rect(0, 135, 210, 162, style="F")
 
-        # Run details card
+        # Run details
         pdf.set_xy(25, 150)
         pdf.set_font("Helvetica", style="B", size=11)
         pdf.set_text_color(*_DARK_BLUE)
@@ -137,15 +185,15 @@ class PDFExporter:
         pdf.set_text_color(*_TEXT)
 
         details = [
-            ("Input Files",           ", ".join(Path(f).name for f in summary.get("input_files", []))),
-            ("Segments Analysed",     str(summary.get("total_segments", 0))),
-            ("Unique Codes",          str(summary.get("unique_codes", 0))),
-            ("Categories",            str(summary.get("categories", 0))),
-            ("Themes",                str(summary.get("themes", 0))),
-            ("Core Category",         summary.get("core_category") or "—"),
-            ("Graph Nodes",           str(summary.get("graph_nodes", 0))),
-            ("Graph Edges",           str(summary.get("graph_edges", 0))),
-            ("Run Time",              f"{summary.get('run_time_seconds', 0):.1f}s"),
+            ("Input Files",       _safe(", ".join(Path(f).name for f in summary.get("input_files", [])))),
+            ("Segments Analysed", _safe(summary.get("total_segments", 0))),
+            ("Unique Codes",      _safe(summary.get("unique_codes", 0))),
+            ("Categories",        _safe(summary.get("categories", 0))),
+            ("Themes",            _safe(summary.get("themes", 0))),
+            ("Core Category",     _safe(summary.get("core_category") or "-")),
+            ("Graph Nodes",       _safe(summary.get("graph_nodes", 0))),
+            ("Graph Edges",       _safe(summary.get("graph_edges", 0))),
+            ("Run Time",          f"{summary.get('run_time_seconds', 0):.1f}s"),
         ]
         for key, val in details:
             pdf.set_x(30)
@@ -164,17 +212,17 @@ class PDFExporter:
         pdf.ln(2)
 
         rows = [
-            ("Metric",                         "Value"),
-            ("Input Files",                    ", ".join(Path(f).name for f in summary.get("input_files", []))),
-            ("Segments Analysed",              str(summary.get("total_segments", 0))),
-            ("Unique First-Cycle Codes",       str(summary.get("unique_codes", 0))),
-            ("Focused Categories",             str(summary.get("categories", 0))),
-            ("Themes (Theoretical Coding)",    str(summary.get("themes", 0))),
-            ("Core Category",                  summary.get("core_category") or "—"),
-            ("Knowledge Graph Nodes",          str(summary.get("graph_nodes", 0))),
-            ("Knowledge Graph Edges",          str(summary.get("graph_edges", 0))),
-            ("Total Run Time",                 f"{summary.get('run_time_seconds', 0):.1f} seconds"),
-            ("Output Directory",               summary.get("output_dir", "—")),
+            ("Metric",                      "Value"),
+            ("Input Files",                 _safe(", ".join(Path(f).name for f in summary.get("input_files", [])))),
+            ("Segments Analysed",           _safe(summary.get("total_segments", 0))),
+            ("Unique First-Cycle Codes",    _safe(summary.get("unique_codes", 0))),
+            ("Focused Categories",          _safe(summary.get("categories", 0))),
+            ("Themes (Theoretical Coding)", _safe(summary.get("themes", 0))),
+            ("Core Category",               _safe(summary.get("core_category") or "-")),
+            ("Knowledge Graph Nodes",       _safe(summary.get("graph_nodes", 0))),
+            ("Knowledge Graph Edges",       _safe(summary.get("graph_edges", 0))),
+            ("Total Run Time",              f"{summary.get('run_time_seconds', 0):.1f} seconds"),
+            ("Output Directory",            _safe(summary.get("output_dir", "-"))),
         ]
         hs = FontFace(emphasis="BOLD", fill_color=_DARK_BLUE, color=_WHITE)
         with pdf.table(col_widths=(85, 95), headings_style=hs,
@@ -186,9 +234,9 @@ class PDFExporter:
 
     def _first_cycle_codes(self, pdf: _PDF, first_cycle: FirstCycleResult) -> None:
         pdf.add_page()
-        self._heading(pdf, "First Cycle Codes — Frequency Table")
+        self._heading(pdf, "First Cycle Codes - Frequency Table")
         self._caption(pdf,
-            "All codes generated by the LLM using Saldaña's First Cycle methods, "
+            "All codes generated by the LLM using Saldana's First Cycle methods, "
             "sorted by how frequently each code appeared across all segments.")
         pdf.ln(2)
 
@@ -204,8 +252,8 @@ class PDFExporter:
                 code_list = first_cycle.all_codes.get(label, [])
                 code_type = code_list[0].code_type.value if code_list else ""
                 row = table.row()
-                row.cell(label[:90])
-                row.cell(code_type[:25])
+                row.cell(_safe(label)[:90])
+                row.cell(_safe(code_type)[:25])
                 row.cell(str(count))
 
     def _coded_segments(self, pdf: _PDF, first_cycle: FirstCycleResult) -> None:
@@ -226,14 +274,14 @@ class PDFExporter:
             pdf.set_fill_color(*_LIGHT_GRAY)
             pdf.set_font("Helvetica", style="B", size=9)
             pdf.cell(
-                0, 6, f"  {cs.segment.segment_id}",
+                0, 6, f"  {_safe(cs.segment.segment_id)}",
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True,
             )
 
             # Text preview
-            preview = cs.segment.text[:350].replace("\n", " ")
+            preview = _safe(cs.segment.text[:350].replace("\n", " "))
             if len(cs.segment.text) > 350:
-                preview += "…"
+                preview += "..."
             pdf.set_font("Helvetica", style="I", size=8)
             pdf.set_text_color(*_GRAY)
             pdf.set_x(pdf.l_margin + 3)
@@ -252,20 +300,20 @@ class PDFExporter:
                     hrow.cell("Description")
                     for code in cs.codes:
                         row = table.row()
-                        row.cell(code.display_label[:52])
-                        row.cell(code.code_type.value[:22])
-                        row.cell(code.description[:90])
+                        row.cell(_safe(code.display_label)[:52])
+                        row.cell(_safe(code.code_type.value)[:22])
+                        row.cell(_safe(code.description)[:90])
             pdf.ln(4)
 
     def _pattern_codes(self, pdf: _PDF, second_cycle: SecondCycleResult) -> None:
         if not second_cycle.pattern_codes:
             return
         pdf.add_page()
-        self._heading(pdf, "Second Cycle — Pattern Codes")
+        self._heading(pdf, "Second Cycle - Pattern Codes")
         self._caption(pdf,
             "Pattern Coding (Miles & Huberman, 1994) groups first-cycle codes into explanatory "
             "meta-patterns that synthesise large blocks of data into a single conceptual trope. "
-            "Saldaña: 'Pattern codes are hunches — some pan out, but many do not.'")
+            "Saldana: 'Pattern codes are hunches - some pan out, but many do not.'")
         pdf.ln(3)
 
         for pattern_name, codes in second_cycle.pattern_codes.items():
@@ -273,11 +321,11 @@ class PDFExporter:
                 pdf.add_page()
             pdf.set_fill_color(*_ALT_ROW)
             pdf.set_font("Helvetica", style="B", size=10)
-            pdf.cell(0, 7, f"  {pattern_name}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
+            pdf.cell(0, 7, f"  {_safe(pattern_name)}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
             pdf.set_font("Helvetica", size=8)
             pdf.set_text_color(*_GRAY)
             pdf.set_x(pdf.l_margin + 4)
-            pdf.multi_cell(0, 4.5, ",   ".join(codes), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, 4.5, _safe(",   ".join(codes)), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_text_color(*_TEXT)
             pdf.ln(3)
 
@@ -285,7 +333,7 @@ class PDFExporter:
         if not second_cycle.categories:
             return
         pdf.add_page()
-        self._heading(pdf, "Second Cycle — Focused Categories")
+        self._heading(pdf, "Second Cycle - Focused Categories")
         self._caption(pdf,
             "Focused Coding (Charmaz, 2006) identifies the most salient categories. "
             "Axial Coding (Strauss & Corbin, 1998) enriches each with properties (characteristics) "
@@ -296,12 +344,11 @@ class PDFExporter:
             if pdf.get_y() > 245:
                 pdf.add_page()
 
-            # Category header
             pdf.set_fill_color(*_DARK_BLUE)
             pdf.set_text_color(*_WHITE)
             pdf.set_font("Helvetica", style="B", size=10)
             pdf.cell(
-                0, 7, f"  {cat.name}   (frequency: {cat.frequency})",
+                0, 7, f"  {_safe(cat.name)}   (frequency: {cat.frequency})",
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True,
             )
             pdf.set_text_color(*_TEXT)
@@ -309,15 +356,15 @@ class PDFExporter:
             if cat.description:
                 pdf.set_font("Helvetica", size=9)
                 pdf.set_x(pdf.l_margin + 3)
-                pdf.multi_cell(0, 5, cat.description, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                pdf.multi_cell(0, 5, _safe(cat.description), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
             if cat.codes:
                 pdf.set_font("Helvetica", style="I", size=8)
                 pdf.set_text_color(*_GRAY)
                 pdf.set_x(pdf.l_margin + 3)
-                member_text = ",   ".join(cat.codes[:25])
+                member_text = _safe(",   ".join(cat.codes[:25]))
                 if len(cat.codes) > 25:
-                    member_text += f"  … (+{len(cat.codes) - 25} more)"
+                    member_text += f"  ... (+{len(cat.codes) - 25} more)"
                 pdf.multi_cell(0, 4.5, f"Member codes: {member_text}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.set_text_color(*_TEXT)
 
@@ -328,7 +375,7 @@ class PDFExporter:
                 pdf.set_font("Helvetica", size=8)
                 for k, v in cat.properties.items():
                     pdf.set_x(pdf.l_margin + 7)
-                    pdf.multi_cell(0, 4.5, f"• {k}: {v}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                    pdf.multi_cell(0, 4.5, f"- {_safe(k)}: {_safe(v)}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
             if cat.dimensions:
                 pdf.set_font("Helvetica", style="B", size=8)
@@ -337,7 +384,7 @@ class PDFExporter:
                 pdf.set_font("Helvetica", size=8)
                 for k, v in cat.dimensions.items():
                     pdf.set_x(pdf.l_margin + 7)
-                    pdf.multi_cell(0, 4.5, f"• {k}: {v}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                    pdf.multi_cell(0, 4.5, f"- {_safe(k)}: {_safe(v)}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
             pdf.ln(5)
 
@@ -348,7 +395,7 @@ class PDFExporter:
         self._heading(pdf, "Axial Relationships")
         self._caption(pdf,
             "Axial Coding maps the relationships between categories using the paradigm: "
-            "Conditions → Actions/Interactions → Consequences. "
+            "Conditions -> Actions/Interactions -> Consequences. "
             "Relationship types: causes, enables, constrains, is_context_for, leads_to, strategy_for.")
         pdf.ln(2)
 
@@ -362,14 +409,14 @@ class PDFExporter:
             hrow.cell("Description")
             for rel in second_cycle.axial_relationships:
                 row = table.row()
-                row.cell(rel.source_category[:42])
-                row.cell(rel.relationship_type[:22])
-                row.cell(rel.target_category[:42])
-                row.cell(rel.description[:80])
+                row.cell(_safe(rel.source_category)[:42])
+                row.cell(_safe(rel.relationship_type)[:22])
+                row.cell(_safe(rel.target_category)[:42])
+                row.cell(_safe(rel.description)[:80])
 
         pdf.ln(4)
 
-        # Conditions / Consequences detail per relationship
+        # Conditions / Consequences detail
         for rel in second_cycle.axial_relationships:
             if not rel.conditions and not rel.consequences:
                 continue
@@ -379,7 +426,7 @@ class PDFExporter:
             pdf.set_font("Helvetica", style="B", size=9)
             pdf.cell(
                 0, 6,
-                f"  {rel.source_category}  →  [{rel.relationship_type}]  →  {rel.target_category}",
+                f"  {_safe(rel.source_category)}  ->  [{_safe(rel.relationship_type)}]  ->  {_safe(rel.target_category)}",
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True,
             )
             if rel.conditions:
@@ -389,7 +436,7 @@ class PDFExporter:
                 pdf.set_font("Helvetica", size=8)
                 for cond in rel.conditions:
                     pdf.set_x(pdf.l_margin + 8)
-                    pdf.multi_cell(0, 4.5, f"• {cond}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                    pdf.multi_cell(0, 4.5, f"- {_safe(cond)}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             if rel.consequences:
                 pdf.set_font("Helvetica", style="B", size=8)
                 pdf.set_x(pdf.l_margin + 4)
@@ -397,7 +444,7 @@ class PDFExporter:
                 pdf.set_font("Helvetica", size=8)
                 for cons in rel.consequences:
                     pdf.set_x(pdf.l_margin + 8)
-                    pdf.multi_cell(0, 4.5, f"• {cons}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                    pdf.multi_cell(0, 4.5, f"- {_safe(cons)}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.ln(3)
 
     def _themes_and_theory(self, pdf: _PDF, second_cycle: SecondCycleResult) -> None:
@@ -406,7 +453,7 @@ class PDFExporter:
         self._caption(pdf,
             "Theoretical Coding (Glaser, 1978) identifies one core category that integrates all others "
             "and produces a grounded theoretical statement. "
-            "Saldaña: 'Mere numeric frequency is not necessarily a reliable indicator of a core category.'")
+            "Saldana: 'Mere numeric frequency is not necessarily a reliable indicator of a core category.'")
         pdf.ln(4)
 
         # Core category
@@ -415,21 +462,18 @@ class PDFExporter:
             self._sub_heading(pdf, "Core Category")
             pdf.ln(1)
 
-            # Red-tinted name block
             pdf.set_fill_color(*_RED_BG)
             pdf.set_font("Helvetica", style="B", size=14)
             pdf.set_text_color(*_RED)
-            pdf.cell(0, 11, f"  {core.name}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
+            pdf.cell(0, 11, f"  {_safe(core.name)}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
             pdf.set_text_color(*_TEXT)
 
             if core.description:
                 pdf.set_fill_color(*_RED_BG)
                 pdf.set_font("Helvetica", size=9)
                 pdf.set_x(pdf.l_margin + 3)
-                pdf.multi_cell(
-                    0, 5, core.description,
-                    new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True,
-                )
+                pdf.multi_cell(0, 5, _safe(core.description),
+                               new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
 
             if core.theoretical_statement:
                 pdf.set_fill_color(*_RED_BG)
@@ -438,10 +482,8 @@ class PDFExporter:
                 pdf.cell(0, 5, "Theoretical Statement:", new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
                 pdf.set_font("Helvetica", style="I", size=9)
                 pdf.set_x(pdf.l_margin + 3)
-                pdf.multi_cell(
-                    0, 5, core.theoretical_statement,
-                    new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True,
-                )
+                pdf.multi_cell(0, 5, _safe(core.theoretical_statement),
+                               new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
 
             if core.related_categories:
                 pdf.set_fill_color(*_RED_BG)
@@ -450,7 +492,7 @@ class PDFExporter:
                 pdf.set_x(pdf.l_margin + 3)
                 pdf.multi_cell(
                     0, 4.5,
-                    "Related categories: " + ", ".join(core.related_categories),
+                    "Related categories: " + _safe(", ".join(core.related_categories)),
                     new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True,
                 )
                 pdf.set_text_color(*_TEXT)
@@ -473,14 +515,14 @@ class PDFExporter:
                 )
                 pdf.set_font("Helvetica", size=9)
                 pdf.set_x(pdf.l_margin + 3)
-                pdf.multi_cell(0, 5, theme.statement, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                pdf.multi_cell(0, 5, _safe(theme.statement), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
                 if theme.categories:
                     pdf.set_font("Helvetica", style="I", size=8)
                     pdf.set_text_color(*_GRAY)
                     pdf.set_x(pdf.l_margin + 3)
                     pdf.multi_cell(
-                        0, 4.5, "Categories: " + ", ".join(theme.categories),
+                        0, 4.5, "Categories: " + _safe(", ".join(theme.categories)),
                         new_x=XPos.LMARGIN, new_y=YPos.NEXT,
                     )
                     pdf.set_text_color(*_TEXT)
@@ -492,25 +534,25 @@ class PDFExporter:
                     pdf.set_text_color(*_GRAY)
                     pdf.set_x(pdf.l_margin + 6)
                     pdf.multi_cell(
-                        0, 4.5, f'"{ev[:220]}"',
+                        0, 4.5, f'"{_safe(ev[:220])}"',
                         new_x=XPos.LMARGIN, new_y=YPos.NEXT,
                     )
                     pdf.set_text_color(*_TEXT)
                 pdf.ln(4)
 
     def _graphs(self, pdf: _PDF, output_dir: Path) -> None:
-        # ── Layer 1 ──────────────────────────────────────────────────────────
+        # Layer 1
         layer1 = output_dir / "graphs" / "layer1_high_level_graph.png"
         if layer1.exists():
             pdf.add_page()
-            self._heading(pdf, "Knowledge Graph — Layer 1: High-Level Overview")
+            self._heading(pdf, "Knowledge Graph - Layer 1: High-Level Overview")
             self._caption(pdf,
-                "Full knowledge graph: core category → themes → categories → patterns → codes. "
+                "Full knowledge graph: core category -> themes -> categories -> patterns -> codes. "
                 "Node size reflects importance; edge labels show relationship types.")
             pdf.ln(2)
             pdf.image(str(layer1), x=pdf.l_margin, w=180)
 
-        # ── Layer 2 ──────────────────────────────────────────────────────────
+        # Layer 2
         detail_dir = output_dir / "graphs" / "layer2_details"
         if not detail_dir.exists():
             return
@@ -519,14 +561,14 @@ class PDFExporter:
             return
 
         pdf.add_page()
-        self._heading(pdf, "Knowledge Graph — Layer 2: Node Detail Views")
+        self._heading(pdf, "Knowledge Graph - Layer 2: Node Detail Views")
         self._caption(pdf,
-            "Each graph shows the 2-hop neighbourhood of a key node — "
+            "Each graph shows the 2-hop neighbourhood of a key node - "
             "every node and edge directly connected to and from it.")
         pdf.ln(2)
 
         for img_path in detail_images:
-            node_name = img_path.stem.replace("detail_", "").replace("_", " ")
+            node_name = _safe(img_path.stem.replace("detail_", "").replace("_", " "))
             pdf.add_page()
             self._sub_heading(pdf, node_name)
             pdf.ln(2)
