@@ -104,6 +104,17 @@ class QualitativeCodingAgent:
             "exported_images": list(exported_images.keys()),
             "output_dir": str(output_path.resolve()),
         }
+
+        # 7. PDF report
+        _cb("pdf", "Generating PDF report…", 0.98)
+        try:
+            from agent.pdf_exporter import PDFExporter
+            pdf_path = PDFExporter().export(first_cycle, second_cycle, summary, output_path)
+            summary["pdf_report"] = pdf_path
+        except Exception as exc:
+            logger.warning("PDF generation failed (non-fatal): %s", exc)
+            summary["pdf_report"] = None
+
         _save_json(output_path / "analysis_summary.json", summary)
         _cb("done", "Analysis complete", 1.0)
 

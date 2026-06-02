@@ -155,9 +155,11 @@ Open `http://localhost:8501`. The sidebar lets you configure:
 - **Research Questions** — used by Structural Coding only; leave blank otherwise
 - **Max Segments** — limit segments to control cost (0 = unlimited; use 3–5 for testing)
 - **Max Chars per Segment** — chunk size (~2500 chars ≈ 400 words)
-- **Output Directory** — where JSON files and graph PNGs are saved
+- **Output Directory** — where results are saved locally
 
 Upload files via the **Upload Files** tab or paste text directly in the **Paste Text** tab. Both can be used together.
+
+After the run completes, results are shown across five tabs (Overview, First Cycle Codes, Knowledge Graph, Themes & Theory, Export). The **Export** tab has a single button to download the full PDF report.
 
 ### Command Line
 
@@ -191,6 +193,7 @@ Every run creates a timestamped subfolder:
 ```
 output/
 └── 20240601_143022/
+    ├── analysis_report.pdf           # ← Single downloadable PDF report (all sections + all graphs)
     ├── first_cycle_codes.json        # All coded segments: codes, excerpts, types, frequencies
     ├── second_cycle_results.json     # Categories, axial relationships, themes, core category
     ├── knowledge_graph.json          # Full graph as node/edge lists with metadata
@@ -202,6 +205,23 @@ output/
             ├── detail_THEME_1.png
             └── ...
 ```
+
+### PDF Report Contents
+
+The `analysis_report.pdf` consolidates the entire analysis into a single shareable document:
+
+| Section | Contents |
+|---|---|
+| Cover page | Title, date, run summary (files, codes, categories, themes) |
+| Analysis Summary | Full metrics table |
+| First Cycle Codes | Complete code frequency table (all codes, type, count) |
+| Coded Segments | Every segment with its text preview and assigned codes |
+| Pattern Codes | All meta-patterns with their member codes |
+| Focused Categories | Each category with description, member codes, properties, dimensions |
+| Axial Relationships | Relationship table + conditions/consequences per relationship |
+| Themes & Theory | Core category (highlighted), theoretical statement, all themes with evidence |
+| Knowledge Graph Layer 1 | Full high-level graph image |
+| Knowledge Graph Layer 2 | One detail graph page per key node (core, themes, categories, patterns) |
 
 ---
 

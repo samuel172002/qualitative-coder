@@ -353,30 +353,22 @@ if st.session_state.analysis_done and st.session_state.summary:
 
     # ── Export ────────────────────────────────────────────────────────────────
     with tab_export:
-        st.subheader("Download Results")
-        exports = [
-            ("first_cycle_codes.json", "First Cycle Codes"),
-            ("second_cycle_results.json", "Second Cycle Results"),
-            ("knowledge_graph.json", "Knowledge Graph"),
-            ("analysis_summary.json", "Analysis Summary"),
-        ]
-        for filename, label in exports:
-            fpath = out_dir / filename
-            if fpath.exists():
-                with open(fpath, encoding="utf-8") as f:
-                    content = f.read()
-                st.download_button(
-                    label=f"⬇️ {label}",
-                    data=content,
-                    file_name=filename,
-                    mime="application/json",
-                )
-
-        layer1 = out_dir / "graphs" / "layer1_high_level_graph.png"
-        if layer1.exists():
-            st.download_button(
-                "⬇️ High-Level Graph (PNG)",
-                data=layer1.read_bytes(),
-                file_name="layer1_high_level_graph.png",
-                mime="image/png",
+        st.subheader("Download Full Report")
+        pdf_path = out_dir / "analysis_report.pdf"
+        if pdf_path.exists():
+            st.markdown(
+                "The PDF report contains every section of the analysis: summary metrics, "
+                "all first-cycle codes and coded segments, pattern codes, focused categories, "
+                "axial relationships, themes, the core category and theoretical statement, "
+                "the Layer 1 knowledge graph, and every Layer 2 node detail graph."
             )
+            st.download_button(
+                label="⬇️ Download Analysis Report (PDF)",
+                data=pdf_path.read_bytes(),
+                file_name="analysis_report.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                type="primary",
+            )
+        else:
+            st.info("PDF report not yet generated. Run an analysis first.")
