@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from first_cycle.coders import CODER_REGISTRY
 
@@ -278,25 +279,47 @@ if st.session_state.analysis_done and st.session_state.summary:
 
     # ── Knowledge Graph ───────────────────────────────────────────────────────
     with tab_graph:
-        layer1_path = out_dir / "graphs" / "layer1_high_level_graph.png"
-        if layer1_path.exists():
-            st.subheader("Layer 1 — High-Level Knowledge Graph")
-            st.image(str(layer1_path), use_container_width=True)
+        layer1_png = out_dir / "graphs" / "layer1_high_level_graph.png"
+        layer1_html = out_dir / "graphs" / "layer1_high_level_graph.html"
 
-            detail_dir = out_dir / "graphs" / "layer2_details"
-            detail_images = sorted(detail_dir.glob("detail_*.png")) if detail_dir.exists() else []
-            if detail_images:
-                st.subheader("Layer 2 — Node Detail Views")
-                selected_detail = st.selectbox(
-                    "Select a node to view its detail graph:",
-                    options=[p.stem.replace("detail_", "") for p in detail_images],
-                )
-                if selected_detail:
-                    img_path = detail_dir / f"detail_{selected_detail}.png"
-                    if img_path.exists():
-                        st.image(str(img_path), use_container_width=True)
+        if layer1_html.exists():
+            st.subheader("Layer 1 — High-Level Knowledge Graph")
+            st.caption("Drag nodes to rearrange · Scroll to zoom · Hover for details")
+            components.html(layer1_html.read_text(encoding="utf-8"), height=800, scrolling=False)
+            if layer1_png.exists():
+                with st.expander("Show static image (for copy/paste or export)"):
+                    st.image(str(layer1_png), use_container_width=True)
+        elif layer1_png.exists():
+            st.subheader("Layer 1 — High-Level Knowledge Graph")
+            st.image(str(layer1_png), use_container_width=True)
         else:
             st.info("Graph images not yet generated.")
+
+        detail_dir = out_dir / "graphs" / "layer2_details"
+        detail_htmls = sorted(detail_dir.glob("detail_*.html")) if detail_dir.exists() else []
+        detail_pngs  = sorted(detail_dir.glob("detail_*.png"))  if detail_dir.exists() else []
+
+        if detail_htmls:
+            st.subheader("Layer 2 — Node Detail Views")
+            stems = [p.stem.replace("detail_", "") for p in detail_htmls]
+            selected = st.selectbox("Select a node to view its detail graph:", options=stems)
+            if selected:
+                html_path = detail_dir / f"detail_{selected}.html"
+                if html_path.exists():
+                    st.caption("Drag, zoom, and hover for context.")
+                    components.html(html_path.read_text(encoding="utf-8"), height=700, scrolling=False)
+                png_path = detail_dir / f"detail_{selected}.png"
+                if png_path.exists():
+                    with st.expander("Show static image"):
+                        st.image(str(png_path), use_container_width=True)
+        elif detail_pngs:
+            st.subheader("Layer 2 — Node Detail Views")
+            stems = [p.stem.replace("detail_", "") for p in detail_pngs]
+            selected = st.selectbox("Select a node to view its detail graph:", options=stems)
+            if selected:
+                img_path = detail_dir / f"detail_{selected}.png"
+                if img_path.exists():
+                    st.image(str(img_path), use_container_width=True)
 
     # ── Themes & Theory ───────────────────────────────────────────────────────
     with tab_theory:

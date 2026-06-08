@@ -39,6 +39,131 @@ EDGE_STYLES: dict[str, dict] = {
 SKIP_EDGE_LABELS = {"source_of", "contains_code", "groups_code"}
 
 
+def build_interactive_html(
+    G: nx.DiGraph,
+    output_path: str | Path,
+    title: str,
+) -> None:
+    if G.number_of_nodes() == 0:
+        logger.warning("Empty graph — skipping HTML export for '%s'", title)
+        return
+
+    from pyvis.network import Network  # lazy import; pyvis is optional
+
+    net = Network(
+        height="750px",
+        width="100%",
+        bgcolor="#1a1a2e",
+        font_color="#e0e0e0",
+        directed=True,
+        notebook=False,
+    )
+
+    for nid, data in G.nodes(data=True):
+        node_type = data.get("node_type", "code")
+        label_text = str(data.get("label", nid))
+        color = COLOR_MAP.get(node_type, "#BDC3C7")
+        pyvis_size = data.get("size", 1.0) * 10
+
+        parts = [f"<b>{label_text}</b>", f"Type: {node_type}"]
+        if "frequency" in data:
+            parts.append(f"Frequency: {data['frequency']}")
+        if "description" in data:
+            parts.append(f"Description: {str(data['description'])[:200]}")
+        if "full_statement" in data:
+            parts.append(f"Statement: {str(data['full_statement'])[:200]}")
+        if "theoretical_statement" in data:
+            parts.append(f"Theory: {str(data['theoretical_statement'])[:200]}")
+        if "level" in data:
+            parts.append(f"Level: {data['level']}")
+
+        net.add_node(
+            nid,
+            label=label_text,
+            title="<br>".join(parts),
+            color=color,
+            size=pyvis_size,
+            font={"size": 12, "color": "#ffffff"},
+        )
+
+    for src, tgt, data in G.edges(data=True):
+        rel = data.get("relationship", "")
+        style_info = EDGE_STYLES.get(rel, {"color": "#BDC3C7", "style": "solid", "width": 1.0})
+        edge_label = "" if rel in SKIP_EDGE_LABELS else rel.replace("_", " ")
+        net.add_edge(
+            src, tgt,
+            title=rel,
+            label=edge_label,
+            color=style_info["color"],
+            width=max(style_info["width"], 1.0),
+            arrows="to",
+            font={"size": 9, "color": "#cccccc", "strokeWidth": 0},
+        )
+
+    net.set_options("""{
+      "physics": {
+        "enabled": true,
+        "barnesHut": {
+          "gravitationalConstant": -8000,
+          "centralGravity": 0.3,
+          "springLength": 200,
+          "springConstant": 0.04,
+          "damping": 0.09,
+          "avoidOverlap": 1.0
+        },
+        "minVelocity": 0.5,
+        "maxVelocity": 30,
+        "timestep": 0.2,
+        "stabilization": {
+          "enabled": true,
+          "iterations": 300,
+          "fit": true
+        },
+        "solver": "barnesHut"
+      },
+      "interaction": {
+        "hover": true,
+        "tooltipDelay": 100,
+        "navigationButtons": true,
+        "keyboard": true
+      },
+      "edges": {
+        "smooth": {"type": "curvedCW", "roundness": 0.2},
+        "font": {"align": "middle"}
+      },
+      "nodes": {
+        "shape": "dot",
+        "scaling": {"min": 8, "max": 50},
+        "borderWidth": 2,
+        "borderWidthSelected": 4
+      }
+    }""")
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    net.save_graph(str(output_path))
+
+    # Freeze nodes once the initial layout stabilizes so the graph is static by default.
+    # Users can still drag individual nodes manually.
+    html = output_path.read_text(encoding="utf-8")
+    freeze_js = (
+        "<script>"
+        "document.addEventListener('DOMContentLoaded',function(){"
+        "var _t=setInterval(function(){"
+        "if(typeof network!=='undefined'){"
+        "clearInterval(_t);"
+        "network.once('stabilized',function(){"
+        "network.setOptions({physics:{enabled:false}});"
+        "});"
+        "}"
+        "},100);"
+        "});"
+        "</script>"
+    )
+    output_path.write_text(html.replace("</body>", freeze_js + "</body>"), encoding="utf-8")
+    logger.info("Saved interactive graph HTML: %s", output_path)
+
+
 def _wrap_label(label: str, width: int = 16) -> str:
     return "\n".join(textwrap.wrap(label, width))
 
@@ -48,7 +173,7 @@ def draw_graph(
     title: str,
     output_path: str | Path,
     figsize: tuple[int, int] = (16, 12),
-    font_size: int = 8,
+    font_size: int = 10,
 ) -> None:
     if G.number_of_nodes() == 0:
         logger.warning("Empty graph — skipping draw for '%s'", title)
@@ -57,9 +182,12 @@ def draw_graph(
     fig, ax = plt.subplots(figsize=figsize, facecolor="white")
     ax.set_facecolor("white")
 
-    # Layout
+    # Layout — spring with increased node spacing (~3× NetworkX default)
+    import math as _math
+    n = max(G.number_of_nodes(), 1)
+    k_spacing = 3.0 / _math.sqrt(n)
     try:
-        pos = nx.kamada_kawai_layout(G)
+        pos = nx.spring_layout(G, seed=42, k=k_spacing, iterations=100)
     except Exception:
         pos = nx.spring_layout(G, seed=42)
 
@@ -94,12 +222,12 @@ def draw_graph(
             G, pos, edgelist=edge_list,
             edge_color=style_info["color"],
             style=style_info["style"],
-            width=style_info["width"],
+            width=style_info["width"] * 1.5,
             ax=ax,
             arrows=True,
-            arrowsize=12,
-            connectionstyle="arc3,rad=0.1",
-            alpha=0.75,
+            arrowsize=20,
+            connectionstyle="arc3,rad=0.2",
+            alpha=0.90,
         )
 
     # Edge labels for important relationships
@@ -156,8 +284,11 @@ def export_graphs(
     # Layer 1
     high_level = graph_builder.get_high_level_subgraph(max_nodes=max_high_level_nodes)
     layer1_path = graphs_dir / "layer1_high_level_graph.png"
-    draw_graph(high_level, "Knowledge Graph — High-Level View", layer1_path, figsize=(18, 13))
+    draw_graph(high_level, "Knowledge Graph — High-Level View", layer1_path, figsize=(24, 18))
     exported["layer1"] = str(layer1_path)
+    layer1_html = graphs_dir / "layer1_high_level_graph.html"
+    build_interactive_html(high_level, layer1_html, "Knowledge Graph — High-Level View")
+    exported["layer1_html"] = str(layer1_html)
 
     # Layer 2 — one detail image per Layer 1 node
     for nid, data in high_level.nodes(data=True):
@@ -174,10 +305,13 @@ def export_graphs(
             subgraph,
             f"Detail: {label[:60]}",
             detail_path,
-            figsize=(16, 12),
-            font_size=8,
+            figsize=(20, 15),
+            font_size=9,
         )
         exported[f"layer2_{safe}"] = str(detail_path)
+        detail_html = detail_dir / f"detail_{safe}.html"
+        build_interactive_html(subgraph, detail_html, f"Detail: {label[:60]}")
+        exported[f"layer2_{safe}_html"] = str(detail_html)
 
     logger.info("Exported %d graph images to %s", len(exported), graphs_dir)
     return exported
